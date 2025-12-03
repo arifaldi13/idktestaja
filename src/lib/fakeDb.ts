@@ -467,9 +467,7 @@ function emit() {
 
 export function subscribe(listener: (snapshot: DemoDataSnapshot) => void) {
     listeners.add(listener);
-    return () => {
-        listeners.delete(listener);
-    };
+    return () => listeners.delete(listener);
 }
 
 export function getSnapshot(): DemoDataSnapshot {
