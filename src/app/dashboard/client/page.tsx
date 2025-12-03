@@ -1,170 +1,106 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import DashboardLayout from '@/components/DashboardLayout';
-import { MOCK_SUBSCRIPTIONS, MOCK_INVOICES, formatCurrency, formatDate } from '@/lib/mockData';
+import { formatCurrency, formatDate, recordPaymentAttempt, simulatePaymentWebhook } from '@/lib/fakeDb';
+import { useDemoData } from '@/lib/useDemoData';
+import { User } from '@/types';
 
 export default function ClientDashboard() {
-    // In a real app, filter by current client's customer org ID
-    // For demo, we'll show first subscription and related invoices
-    const clientSubscription = MOCK_SUBSCRIPTIONS[0]; // PT Teknologi Maju
-    const clientInvoices = MOCK_INVOICES.filter(
-        inv => inv.subscriptionId === clientSubscription.id
-    );
+    const data = useDemoData();
+    const [user, setUser] = useState<User | null>(null);
 
-    const getInvoiceStatusBadgeClass = (status: string) => {
-        const statusMap: Record<string, string> = {
-            'DRAFT': 'badge-draft',
-            'PENDING': 'badge-pending',
-            'PAID': 'badge-paid',
-            'OVERDUE': 'badge-overdue',
-            'CANCELLED': 'badge-cancelled',
-        };
-        return `badge ${statusMap[status] || 'badge-draft'}`;
-    };
+    useEffect(() => {
+        const stored = localStorage.getItem('currentUser');
+        if (stored) setUser(JSON.parse(stored));
+    }, []);
 
-    const getSubscriptionStatusBadgeClass = (status: string) => {
-        const statusMap: Record<string, string> = {
-            'ACTIVE': 'badge-active',
-            'SUSPENDED': 'badge-suspended',
-            'CANCELLED': 'badge-cancelled',
-            'PENDING_ACTIVATION': 'badge-pending',
-        };
-        return `badge ${statusMap[status] || 'badge-draft'}`;
-    };
+    const orgId = user?.customerOrgId || data.customers[0]?.id;
+    const organization = data.customers.find((c) => c.id === orgId);
+    const subscriptions = data.subscriptions.filter((s) => s.customerOrgId === orgId);
+    const invoices = data.invoices.filter((i) => i.customerOrgId === orgId);
+    const payments = data.payments.filter((p) => invoices.some((inv) => inv.id === p.invoiceId));
 
     return (
-        <DashboardLayout title="My Subscriptions">
-            {/* Subscription Overview */}
-            <div className="card mb-8">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Active Subscription</h3>
+        <DashboardLayout title="Client Portal" allowedRoles={['CLIENT', 'ADMIN']}>
+            <p className="text-sm text-gray-600 mb-4">
+                Client dapat melihat profil organisasi, subscription, invoice, dan melakukan retry pembayaran (membuat payment
+                attempt baru) atau simulasi update metode pembayaran melalui tombol.
+            </p>
 
-                <div className="space-y-4">
-                    <div className="flex items-center justify-between pb-4 border-b border-gray-200">
-                        <div>
-                            <div className="text-sm text-gray-600">Subscription Code</div>
-                            <div className="text-lg font-semibold">{clientSubscription.subscriptionCode}</div>
-                        </div>
-                        <span className={getSubscriptionStatusBadgeClass(clientSubscription.status)}>
-                            {clientSubscription.status}
-                        </span>
+            <div className="card mb-6">
+                <h3 className="text-lg font-semibold">Organization Profile</h3>
+                <p className="text-sm text-gray-700">{organization?.name}</p>
+                <p className="text-sm text-gray-500">{organization?.billingAddress}</p>
+                <p className="text-sm text-gray-500">{organization?.contactEmail}</p>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                <div className="card">
+                    <h3 className="text-lg font-semibold mb-3">Subscriptions</h3>
+                    <div className="space-y-3 text-sm">
+                        {subscriptions.map((sub) => (
+                            <div key={sub.id} className="border rounded p-3">
+                                <div className="font-semibold">{sub.subscriptionCode}</div>
+                                <div>Status: {sub.status}</div>
+                                <div>Next billing: {formatDate(sub.nextBillingDate)}</div>
+                                <div className="text-xs text-gray-500">Billing Period: {sub.billingPeriod}</div>
+                                <div className="text-xs text-gray-500">Provisioning tasks:</div>
+                                <ul className="list-disc ml-4 text-xs">
+                                    {data.provisioningTasks
+                                        .filter((p) => p.subscriptionId === sub.id)
+                                        .map((task) => (
+                                            <li key={task.id}>
+                                                {task.type} - {task.status}
+                                            </li>
+                                        ))}
+                                </ul>
+                            </div>
+                        ))}
                     </div>
+                </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div>
-                            <div className="text-sm text-gray-600 mb-1">Start Date</div>
-                            <div className="font-medium">{formatDate(clientSubscription.startDate)}</div>
-                        </div>
-                        <div>
-                            <div className="text-sm text-gray-600 mb-1">Billing Period</div>
-                            <div className="font-medium">{clientSubscription.billingPeriod}</div>
-                        </div>
-                        <div>
-                            <div className="text-sm text-gray-600 mb-1">Next Billing Date</div>
-                            <div className="font-medium">{formatDate(clientSubscription.nextBillingDate)}</div>
-                        </div>
-                    </div>
-
-                    <div>
-                        <div className="text-sm text-gray-600 mb-1">Monthly Amount</div>
-                        <div className="text-2xl font-bold text-primary-600">
-                            {formatCurrency(clientSubscription.totalAmount, clientSubscription.currency)}
-                        </div>
+                <div className="card">
+                    <h3 className="text-lg font-semibold mb-3">Invoices & Payments</h3>
+                    <div className="space-y-2 text-sm">
+                        {invoices.map((inv) => (
+                            <div key={inv.id} className="border rounded p-3">
+                                <div className="font-semibold">{inv.invoiceNumber}</div>
+                                <div>Status: {inv.status}</div>
+                                <div>Due: {formatDate(inv.dueDate)}</div>
+                                <div>Total: {formatCurrency(inv.totalAmount)}</div>
+                                <button
+                                    className="btn btn-primary w-full mt-2 text-xs"
+                                    onClick={() => recordPaymentAttempt(inv.id, 'CLIENT_PORTAL', false)}
+                                >
+                                    Retry Payment (fails)
+                                </button>
+                                <button
+                                    className="btn btn-secondary w-full mt-2 text-xs"
+                                    onClick={() => simulatePaymentWebhook(inv.id, true)}
+                                >
+                                    Pay now (simulate success)
+                                </button>
+                            </div>
+                        ))}
                     </div>
                 </div>
             </div>
 
-            {/* Subscription Items */}
-            <div className="card mb-8">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Services</h3>
-
-                <div className="space-y-3">
-                    {clientSubscription.items.map((item) => (
-                        <div key={item.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                            <div>
-                                <div className="font-medium">{item.productName}</div>
-                                <div className="text-sm text-gray-600">
-                                    Quantity: {item.quantity} × {formatCurrency(item.unitPrice)}
-                                </div>
-                            </div>
-                            <div className="text-right">
-                                <div className="font-semibold">
-                                    {formatCurrency(item.quantity * item.unitPrice)}
-                                </div>
-                            </div>
+            <div className="card">
+                <h3 className="text-lg font-semibold mb-3">Payment History</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+                    {payments.map((pmt) => (
+                        <div key={pmt.id} className="border rounded p-3">
+                            <div className="font-semibold">{data.invoices.find((i) => i.id === pmt.invoiceId)?.invoiceNumber}</div>
+                            <div>{formatCurrency(pmt.amount)}</div>
+                            <div>Status: {pmt.status}</div>
+                            <div className="text-xs text-gray-500">{formatDate(pmt.paymentDate)}</div>
                         </div>
                     ))}
-                </div>
-            </div>
-
-            {/* Invoices & Payment History */}
-            <div className="card">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Invoice & Payment History</h3>
-
-                <div className="table-container">
-                    <table className="table">
-                        <thead>
-                            <tr>
-                                <th>Invoice #</th>
-                                <th>Billing Period</th>
-                                <th>Amount</th>
-                                <th>Due Date</th>
-                                <th>Status</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {clientInvoices.map((invoice) => (
-                                <tr key={invoice.id}>
-                                    <td className="font-medium">{invoice.invoiceNumber}</td>
-                                    <td className="text-sm">
-                                        {formatDate(invoice.billingPeriodStart)} - {formatDate(invoice.billingPeriodEnd)}
-                                    </td>
-                                    <td className="font-medium">
-                                        {formatCurrency(invoice.totalAmount, invoice.currency)}
-                                    </td>
-                                    <td>{formatDate(invoice.dueDate)}</td>
-                                    <td>
-                                        <span className={getInvoiceStatusBadgeClass(invoice.status)}>
-                                            {invoice.status}
-                                        </span>
-                                    </td>
-                                    <td>
-                                        <div className="flex gap-2">
-                                            <button className="text-primary-600 hover:text-primary-800 text-sm font-medium">
-                                                Download
-                                            </button>
-                                            {invoice.status === 'PENDING' && (
-                                                <button className="text-green-600 hover:text-green-800 text-sm font-medium">
-                                                    Pay Now
-                                                </button>
-                                            )}
-                                        </div>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            {/* Payment Method Info */}
-            <div className="card mt-8">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Payment Method</h3>
-                <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                    <div className="flex items-center gap-3">
-                        <div className="w-12 h-8 bg-blue-600 rounded flex items-center justify-center text-white text-xs font-bold">
-                            VISA
-                        </div>
-                        <div>
-                            <div className="font-medium">Virtual Account (BCA)</div>
-                            <div className="text-sm text-gray-600">**** **** **** 1234</div>
-                        </div>
-                    </div>
-                    <button className="text-primary-600 hover:text-primary-800 text-sm font-medium">
-                        Update
-                    </button>
                 </div>
             </div>
         </DashboardLayout>
     );
 }
+

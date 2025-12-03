@@ -7,9 +7,10 @@ import { User } from '@/types';
 interface DashboardLayoutProps {
     children: ReactNode;
     title: string;
+    allowedRoles?: string[];
 }
 
-export default function DashboardLayout({ children, title }: DashboardLayoutProps) {
+export default function DashboardLayout({ children, title, allowedRoles }: DashboardLayoutProps) {
     const router = useRouter();
     const [user, setUser] = useState<User | null>(null);
 
@@ -22,6 +23,10 @@ export default function DashboardLayout({ children, title }: DashboardLayoutProp
 
         try {
             const userData = JSON.parse(userStr);
+            if (allowedRoles && !allowedRoles.includes(userData.role)) {
+                router.push('/login');
+                return;
+            }
             setUser(userData);
         } catch {
             router.push('/login');
