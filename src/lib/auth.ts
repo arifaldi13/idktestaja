@@ -9,7 +9,8 @@ import { User } from '@/types';
  * To add or modify demo users:
  * 1. Add a new user object to the DEMO_USERS array below
  * 2. Specify: id, email, name, role, and password
- * 3. Available roles: 'SALES', 'ADMIN', 'CLIENT', 'FINANCE'
+ * 3. Available roles: 'SALES', 'ADMIN', 'CLIENT', 'FINANCE', 'SYSTEM'
+ * 4. CLIENT users can be linked to a customer organization via customerOrgId
  * 
  * Example:
  * {
@@ -41,12 +42,20 @@ export const DEMO_USERS: User[] = [
         name: 'Client Demo',
         role: 'CLIENT',
         password: 'password',
+        customerOrgId: 'cust-1',
     },
     {
         id: '4',
         email: 'finance@demo.com',
         name: 'Finance Demo',
         role: 'FINANCE',
+        password: 'password',
+    },
+    {
+        id: '5',
+        email: 'system@demo.com',
+        name: 'System Ops',
+        role: 'SYSTEM',
         password: 'password',
     },
 ];
@@ -94,6 +103,8 @@ export function getDashboardRoute(role: string): string {
             return '/dashboard/finance';
         case 'CLIENT':
             return '/dashboard/client';
+        case 'SYSTEM':
+            return '/dashboard/admin';
         default:
             return '/login';
     }

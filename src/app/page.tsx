@@ -27,6 +27,9 @@ export default function HomePage() {
                     case 'CLIENT':
                         router.push('/dashboard/client');
                         break;
+                    case 'SYSTEM':
+                        router.push('/dashboard/admin');
+                        break;
                     default:
                         router.push('/login');
                 }
